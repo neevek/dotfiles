@@ -367,7 +367,7 @@ lvim.autocommands = {
         vim.api.nvim_set_hl(0, "TelescopeBorder", { bg = "#000000", underline = false, bold = false })
         vim.api.nvim_set_hl(0, "SignColumn", { bg = "#000000", underline = false, bold = false })
         vim.api.nvim_set_hl(0, "MsgArea", { bg = "#000000", underline = false, bold = false })
-        vim.api.nvim_set_hl(0, "CursorLine", { bg = "#333333", underline = false, bold = true })
+        vim.api.nvim_set_hl(0, "CursorLine", { bg = "#121212", underline = false, bold = true })
         vim.api.nvim_set_hl(0, "Cursor", { bg = "#cccccc", underline = false, bold = true })
       end,
     },
