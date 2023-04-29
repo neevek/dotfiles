@@ -336,4 +336,28 @@ hi Comment guifg=#666666
 let g:blameLineVirtualTextHighlight = 'Question'
 let g:blameLineGitFormat = ' -> %h | %an | %ar | %s'
 ]]
+
+lvim.autocommands = {
+  {
+    { "ColorScheme" },
+    {
+      pattern = "*",
+      callback = function()
+        -- change `Normal` to the group you want to change
+        -- and `#ffffff` to the color you want
+        -- see `:h nvim_set_hl` for more options
+        vim.api.nvim_set_hl(0, "Normal", { bg = "#000000", underline = false, bold = true })
+        vim.api.nvim_set_hl(0, "NormalNC", { bg = "#000000", underline = false, bold = false })
+        vim.api.nvim_set_hl(0, "EndOfBuffer", { bg = "#000000", fg = "#000000", underline = false, bold = false })
+        vim.api.nvim_set_hl(0, "NvimTreeNormal", { bg = "#000000", underline = false, bold = false })
+        vim.api.nvim_set_hl(0, "TelescopeBorder", { bg = "#000000", underline = false, bold = false })
+        vim.api.nvim_set_hl(0, "SignColumn", { bg = "#000000", underline = false, bold = false })
+        vim.api.nvim_set_hl(0, "MsgArea", { bg = "#000000", underline = false, bold = false })
+        vim.api.nvim_set_hl(0, "CursorLine", { bg = "#333333", underline = false, bold = true })
+        vim.api.nvim_set_hl(0, "Cursor", { bg = "#cccccc", underline = false, bold = true })
+      end,
+    },
+  },
+}
+
 -- >>>>>>> custom settings end here <<<<<<<
