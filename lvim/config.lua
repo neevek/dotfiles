@@ -193,11 +193,25 @@ lvim.builtin.bufferline.options.indicator = { style = "icon", icon = "▎" }
 lvim.builtin.bufferline.options.always_show_bufferline = true
 lvim.builtin.lualine.style = "default"
 lvim.builtin.lualine.options.theme = "horizon"
+lvim.builtin.cmp.completion.completeopt = "menu,menuone,noinsert"
 lvim.builtin.telescope.defaults.layout_config.prompt_position = "top"
 lvim.builtin.telescope.defaults.sorting_strategy = "ascending"
-lvim.builtin.telescope.pickers.find_files.hidden = true
 lvim.builtin.telescope.defaults.path_display = { "smart" }
 lvim.builtin.cmp.completion.completeopt = "menu,menuone,noinsert"
+
+lvim.builtin.telescope.pickers = {
+  find_files = {
+    layout_config = {
+      width = 0.80,
+    },
+    hidden = true,
+  },
+  live_grep = {
+    layout_config = {
+      width = 0.80,
+    },
+  },
+}
 
 lvim.builtin.alpha.dashboard.section.buttons.entries = {
   { "SPC f p", "  Recent Projects", "<CMD>Telescope projects theme=dropdown layout_config={height=60,width=120}<CR>" },
@@ -359,5 +373,7 @@ lvim.autocommands = {
     },
   },
 }
+
+lvim.format_on_save = false
 
 -- >>>>>>> custom settings end here <<<<<<<
