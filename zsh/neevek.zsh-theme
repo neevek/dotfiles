@@ -8,7 +8,7 @@ function get_git_info() {
   fi
 }
 
-PROMPT='[%n%{$reset_color%}@%{$reset_color%}%{$fg[cyan]%}%~%{$reset_color%}$(get_git_info)%{$reset_color%}]$ '
+PROMPT='[%{$fg[green]%}%n%{$reset_color%}%{$reset_color%}@%{$fg[green]%}%M%{$reset_color%}:%{$fg[cyan]%}%~%{$reset_color%}$(get_git_info)%{$reset_color%}]$ '
 
 ZSH_THEME_GIT_PROMPT_REFIX="%{$fg_bold[green]%}"
 ZSH_THEME_GIT_PROMPT_SUFFIX="%{$reset_color%}"
