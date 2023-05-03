@@ -1,2 +1,4 @@
 lvim/plugin/packer_compiled.lua
 lvim/lv-settings.lua
+alacritty/alacritty-theme
+tmux/plugins

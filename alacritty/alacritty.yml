@@ -11,7 +11,7 @@
 #import:
 #  - /path/to/alacritty.yml
 import:
-  - ~/.alacritty-theme/themes/hyper.yaml
+  - ~/.config/alacritty/alacritty-theme/themes/hyper.yaml
 
 # Any items in the `env` entry below will be added as
 # environment variables. Some entries may override variables
