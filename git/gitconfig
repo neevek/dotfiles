@@ -1,0 +1,24 @@
+[user]
+	email = i@neevek.net
+	name = neevek
+[http]
+	proxy = http://192.168.50.188:9800
+[alias]
+	ci = commit
+	st = status
+	df = difftool
+	d = diff
+	dc = diff --cached
+	co = checkout
+	pl = "!f() { git pull --rebase origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
+	ps = "!f() { git push origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
+	psf = "!f() { git push -f origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
+	br = branch
+[core]
+	editor = lvim
+[difftool]
+    prompt = true
+[diff]
+    tool = nvimdiff
+[difftool "nvimdiff"]
+    cmd = "nvim -d \"$LOCAL\" \"$REMOTE\""
