@@ -2,7 +2,7 @@
 	email = i@neevek.net
 	name = neevek
 [http]
-	proxy = http://192.168.50.188:9800
+  ; proxy = http://192.168.50.188:9800
 [alias]
 	ci = commit
 	st = status

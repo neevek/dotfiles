@@ -26,8 +26,8 @@ ln -sfn $current_dir/lvim ~/.config/lvim
 # use "C-x I" to initialize tmux
 
 echo "Pulling submodules..."
-git submodule update --init
-git submodule update --remote --merge
+git submodule update --init tmux/plugins/tpm
+git submodule update --remote --merge tmux/plugins/tpm
 
 echo "Update zsh theme to 'neevek' in ~/.zshrc, and source it"
 echo "Done!"
