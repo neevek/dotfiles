@@ -1,24 +1,40 @@
 [user]
-	email = i@neevek.net
-	name = neevek
+  email = i@neevek.net
+  name = neevek
 [http]
   ; proxy = http://192.168.50.188:9800
 [alias]
-	ci = commit
-	st = status
-	df = difftool
-	d = diff
-	dc = diff --cached
-	co = checkout
-	pl = "!f() { git pull --rebase origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
-	ps = "!f() { git push origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
-	psf = "!f() { git push -f origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
-	br = branch
+  ci = commit
+  st = status
+  df = difftool
+  d = diff
+  dc = diff --cached
+  co = checkout
+  lg = log --all --color --graph --decorate --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --
+  review = "!f() { git push origin HEAD:refs/for/\"$1\"; }; f"
+  pl = "!f() { git pull --rebase origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
+  ps = "!f() { git push origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
+  psf = "!f() { git push -f origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
+  cp = cherry-pick
+  logs = log --stat
+  logf = log --pretty=oneline --stat --
+  brd = "!f() { git checkout -b \"$1_AT_$(date +%Y%m%d_%H%M%S)\" $2; }; f"
+  select-branch = "!f() { git branch | sed -e 's/_AT_/!/' | sort -t! -k2 -r | sed -e 's/!/_AT_/' | perl -pne 's/[*| ]+//g' | fzf | xargs -I {} echo -n {}; }; f"
+  logb = "!f() { git select-branch | xargs -I {} git log {}; }; f"
+  br = "!f() { git select-branch | xargs -I {} git co {}; }; f"
+  cbr = "!f() { git select-branch | pbcopy && echo 'Branch copied!'; }; f"
+  cc = "!f() { branch=$(git select-branch) && git log --pretty='%h [%an] %s' $(echo $branch) | fzf | awk '{printf $1}' | pbcopy && echo 'Commit copied!'; }; f"
+  ccp = "!f() { branch=$(git select-branch) && git log --pretty='%h [%an] %s' $(echo $branch) | fzf | awk '{printf $1}' | xargs -I {} git cherry-pick {}; }; f"
+  vd = "!f() { if [[ $# = 0 ]]; then hash=HEAD; else hash=$1; fi; git difftool $hash~..$hash; }; f"
+  em = "!f() { git status | awk '/both modified:/{print $3}' | fzf | xargs -I {} $EDITOR {}; }; f"
+  au = add -u
+  ca = commit --amend
+
 [core]
-	editor = lvim
+  editor = lvim
 [difftool]
-    prompt = true
+  prompt = true
 [diff]
-    tool = nvimdiff
+  tool = nvimdiff
 [difftool "nvimdiff"]
-    cmd = "nvim -d \"$LOCAL\" \"$REMOTE\""
+  cmd = "nvim -d \"$LOCAL\" \"$REMOTE\""
