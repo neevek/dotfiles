@@ -9,7 +9,6 @@ an executable
 
 -- general
 lvim.log.level = "warn"
-lvim.format_on_save = true
 lvim.colorscheme = "tokyodark"
 -- to disable icons and use a minimalist setup, uncomment the following
 -- lvim.use_icons = false
@@ -395,6 +394,10 @@ lvim.autocommands = {
   },
 }
 
-lvim.format_on_save = false
+lvim.format_on_save = {
+  enabled = true,
+  pattern = "*.rs,*.lua",
+  timeout = 1000,
+}
 
 -- >>>>>>> custom settings end here <<<<<<<
