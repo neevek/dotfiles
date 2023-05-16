@@ -2,5 +2,6 @@ lvim/plugin/packer_compiled.lua
 lvim/lv-settings.lua
 lvim/lazy-lock.json
 tmux/plugins/tmux-themepack
+tmux/plugins/tmux-resurrect
 # alacritty/alacritty-theme
 # tmux/plugins
