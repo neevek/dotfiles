@@ -27,6 +27,7 @@
   ccp = "!f() { branch=$(git select-branch) && git log --pretty='%h [%an] %s' $(echo $branch) | fzf | awk '{printf $1}' | xargs -I {} git cherry-pick {}; }; f"
   vd = "!f() { if [[ $# = 0 ]]; then hash=HEAD; else hash=$1; fi; git difftool $hash~..$hash; }; f"
   em = "!f() { git status | awk '/both modified:/{print $3}' | fzf | xargs -I {} $EDITOR {}; }; f"
+  gh = "!f() { fzf | xargs -I {} git --no-pager log --color=always --pretty='%h %C(magenta)%ai%Creset %C(cyan)%an%Creset %D %s' -M --follow -- {} | fzf --sync --ansi --preview-window='top,80%' --bind='ctrl-f:preview-page-down,ctrl-b:preview-page-up' --preview 'git show --color=always {1}'; }; f"
   au = add -u
   ca = commit --amend
 
