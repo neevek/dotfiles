@@ -19,7 +19,11 @@
   logs = log --stat
   logf = log --pretty=oneline --stat --
   brd = "!f() { git checkout -b \"$1_AT_$(date +%Y%m%d_%H%M%S)\" $2; }; f"
-  select-branch = "!f() { git branch | sed -e 's/_AT_/!/' | sort -t! -k2 -r | sed -e 's/!/_AT_/' | perl -pne 's/[*| ]+//g' | fzf | xargs -I {} echo -n {}; }; f"
+  select-branch = "!f() { git branch | sed -e 's/_AT_/!/' | sort -t! -k2 -r | sed -e 's/!/_AT_/' | perl -pne 's/[*| ]+//g' | \
+    fzf --ansi --preview-window='top,80%' --bind='ctrl-f:preview-page-down,ctrl-b:preview-page-up' --preview 'git log --color=always {1}'; }; f"
+  select-commit = "!f() { git select-branch | xargs -I {} git --no-pager log --color=always --pretty='{} %C(green)%h%Creset %C(magenta)%ai%Creset %C(cyan)%an%Creset %C(green)%D%Creset %s' {} | \
+    fzf --sync --ansi --with-nth=2.. --preview-window='top,80%' --bind='ctrl-f:preview-page-down,ctrl-b:preview-page-up' --preview 'git show --color=always {2}' | \
+    awk '{print $2}'; }; f"
   logb = "!f() { git select-branch | xargs -I {} git log {}; }; f"
   br = "!f() { git select-branch | xargs -I {} git co {}; }; f"
   cbr = "!f() { git select-branch | pbcopy && echo 'Branch copied!'; }; f"
@@ -27,11 +31,16 @@
   ccp = "!f() { branch=$(git select-branch) && git log --pretty='%h [%an] %s' $(echo $branch) | fzf | awk '{printf $1}' | xargs -I {} git cherry-pick {}; }; f"
   vd = "!f() { if [[ $# = 0 ]]; then hash=HEAD; else hash=$1; fi; git difftool $hash~..$hash; }; f"
   em = "!f() { git status | awk '/both modified:/{print $3}' | fzf | xargs -I {} $EDITOR {}; }; f"
+  fh = "!f() { fzf | xargs -I {} git --no-pager log \"${1:-HEAD}\" --color=always --pretty='{} %C(green)%h%Creset %C(magenta)%ai%Creset %C(cyan)%an%Creset een)%D%Creset %s' -M --follow -- {} | \
+    fzf --sync --ansi --with-nth=2.. --preview-window='top,80%' --bind='ctrl-f:preview-page-down,ctrl-b:preview-page-up' --preview 'git show --color=always {2}~..{2} {1}' > /dev/null; }; f"
   au = add -u
   ca = commit --amend
 
+  discard = "!f() { git diff --name-only | fzf --ansi --preview-window='top,80%' --bind='ctrl-f:preview-page-down,ctrl-b:preview-page-up' --preview 'git diff --color=always {1}' | \
+    xargs -r -I {} sh -c 'git checkout -- {} && git discard'; }; f"
+
 [core]
-  editor = lvim
+  editor = nvim
 [difftool]
   prompt = true
 [diff]
