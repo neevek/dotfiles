@@ -1,0 +1,28 @@
+import = ["/Users/neevek/.config/alacritty/alacritty-theme/themes/hyper.toml"]
+
+[colors]
+draw_bold_text_with_bright_colors = true
+
+[colors.primary]
+background = "#000000"
+foreground = "#999999"
+
+[font]
+builtin_box_drawing = true
+size = 17.0
+
+[font.bold]
+family = "Lekton Nerd Font Mono"
+
+[font.italic]
+family = "Lekton Nerd Font Mono"
+style = "Italic"
+
+[font.normal]
+family = "Lekton Nerd Font Mono"
+
+[scrolling]
+history = 10000
+
+[window]
+startup_mode = "Maximized"
