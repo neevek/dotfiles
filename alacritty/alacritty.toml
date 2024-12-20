@@ -9,20 +9,22 @@ foreground = "#999999"
 
 [font]
 builtin_box_drawing = true
-size = 17.0
-
-[font.bold]
-family = "Lekton Nerd Font Mono"
-
-[font.italic]
-family = "Lekton Nerd Font Mono"
-style = "Italic"
+size = 14
 
 [font.normal]
-family = "Lekton Nerd Font Mono"
+# family = "Lekton Nerd Font Mono"
+family = "M+1Code Nerd Font"
+# family = "ProggyClean CE Nerd Font Mono"
+
+[font.bold]
+family = "M+1Code Nerd Font"
+
+[font.italic]
+family = "M+1Code Nerd Font"
+style = "Italic"
 
 [scrolling]
-history = 10000
+history = 50000
 
 [window]
 startup_mode = "Maximized"
