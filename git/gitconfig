@@ -2,7 +2,7 @@
   email = i@neevek.net
   name = neevek
 [http]
-  ; proxy = http://192.168.50.4:19900
+  ; proxy = http://192.168.50.4:9800
 [alias]
   ci = commit
   st = status
@@ -19,7 +19,7 @@
   logs = log --stat
   logf = log --pretty=oneline --stat --
   brd = "!f() { git checkout -b \"$1_AT_$(date +%Y%m%d_%H%M%S)\" $2; }; f"
-  select-branch = "!f() { git branch | sed -e 's/_AT_/!/' | sort -t! -k2 -r | sed -e 's/!/_AT_/' | perl -pne 's/[*| ]+//g' | \
+  select-branch = "!f() { git branch | sed -e 's/_AT_/!/' | sort -t! -k2 -r | sed -e 's/!/_AT_/' | perl -pne 's/[+*| ]+//g' | \
     fzf --ansi --preview-window='top,80%' --bind='ctrl-f:preview-page-down,ctrl-b:preview-page-up' --preview 'git log --color=always {1}'; }; f"
   select-commit = "!f() { git select-branch | xargs -I {} git --no-pager log --color=always --pretty='{} %C(green)%h%Creset %C(magenta)%ai%Creset %C(cyan)%an%Creset %C(green)%D%Creset %s' {} | \
     fzf --sync --ansi --with-nth=2.. --preview-window='top,80%' --bind='ctrl-f:preview-page-down,ctrl-b:preview-page-up' --preview 'git show --color=always {2}' | \
