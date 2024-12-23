@@ -26,6 +26,8 @@ ln -sfn $current_dir/lvim ~/.config/lvim
 # use "C-x I" to initialize tmux
 
 echo "Pulling submodules..."
+git submodule update --init alacritty/alacritty-theme
+git submodule update --remote --merge alacritty/alacritty-theme
 git submodule update --init tmux/plugins/tpm
 git submodule update --remote --merge tmux/plugins/tpm
 
