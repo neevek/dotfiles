@@ -12,9 +12,16 @@ builtin_box_drawing = true
 size = 14
 
 [font.normal]
-# family = "Lekton Nerd Font Mono"
-family = "M+1Code Nerd Font"
-# family = "ProggyClean CE Nerd Font Mono"
+# family = "M+1Code Nerd Font Mono"
+# family = "Fixedsys Core"
+# family = "ProggyDotted"
+family = "Lekton Nerd Font Mono"
+# family = "CozetteVector"
+# family = "menlo"
+
+[font.offset]
+y = 1
+x = 0
 
 [font.bold]
 family = "M+1Code Nerd Font"
