@@ -5,29 +5,24 @@ draw_bold_text_with_bright_colors = true
 
 [colors.primary]
 background = "#000000"
-foreground = "#88ff88"
+foreground = "#33ff33"
 
 [font]
 builtin_box_drawing = true
-size = 14
+size = 16
 
 [font.normal]
-# family = "M+1Code Nerd Font Mono"
-# family = "Fixedsys Core"
-# family = "ProggyDotted"
-family = "Lekton Nerd Font Mono"
-# family = "CozetteVector"
-# family = "menlo"
+family = "Lekton Nerd Font"
 
 [font.offset]
 y = 1
 x = 0
 
 [font.bold]
-family = "M+1Code Nerd Font"
+family = "Lekton Nerd Font"
 
 [font.italic]
-family = "M+1Code Nerd Font"
+family = "Lekton Nerd Font"
 style = "Italic"
 
 [scrolling]
