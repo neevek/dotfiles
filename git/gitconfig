@@ -41,6 +41,7 @@
 
 [core]
   editor = nvim
+  excludesFile = ~/.gitignore_global
 [difftool]
   prompt = true
 [diff]
