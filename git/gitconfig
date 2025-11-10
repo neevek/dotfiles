@@ -11,7 +11,8 @@
   dc = diff --cached
   co = checkout
   lg = log --all --color --graph --decorate --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --
-  review = "!f() { git push origin HEAD:refs/for/\"$1\"; }; f"
+  review = "!f() { git push origin HEAD:refs/for/\"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
+  fco = "!f() { git fetch origin $1 && git checkout $1 && git pull --rebase origin $1; }; f"
   pl = "!f() { git pull --rebase origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
   ps = "!f() { git push origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
   psf = "!f() { git push -f origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
@@ -27,11 +28,11 @@
   logb = "!f() { git select-branch | xargs -I {} git log {}; }; f"
   br = "!f() { git select-branch | xargs -I {} git co {}; }; f"
   cbr = "!f() { git select-branch | pbcopy && echo 'Branch copied!'; }; f"
-  cc = "!f() { branch=$(git select-branch) && git log --pretty='%h [%an] %s' $(echo $branch) | fzf | awk '{printf $1}' | pbcopy && echo 'Commit copied!'; }; f"
-  ccp = "!f() { branch=$(git select-branch) && git log --pretty='%h [%an] %s' $(echo $branch) | fzf | awk '{printf $1}' | xargs -I {} git cherry-pick {}; }; f"
+  cc = "!f() { branch=$(git select-branch) && git log --pretty='%h [%an] %s' $(echo $branch) | fzf --no-sort | awk '{printf $1}' | pbcopy && echo 'Commit copied!'; }; f"
+  ccp = "!f() { branch=$(git select-branch) && git log --pretty='%h [%an] %s' $(echo $branch) | fzf --no-sort | awk '{printf $1}' | xargs -I {} git cherry-pick {}; }; f"
   vd = "!f() { if [[ $# = 0 ]]; then hash=HEAD; else hash=$1; fi; git difftool $hash~..$hash; }; f"
-  em = "!f() { git status | awk '/both modified:/{print $3}' | fzf | xargs -I {} $EDITOR {}; }; f"
-  fh = "!f() { fzf | xargs -I {} git --no-pager log \"${1:-HEAD}\" --color=always --pretty='{} %C(green)%h%Creset %C(magenta)%ai%Creset %C(cyan)%an%Creset een)%D%Creset %s' -M --follow -- {} | \
+  em = "!f() { git status | awk '/both modified:/{print $3}' | fzf --no-sort | xargs -I {} $EDITOR {}; }; f"
+  fh = "!f() { fzf --no-sort | xargs -I {} git --no-pager log \"${1:-HEAD}\" --color=always --pretty='{} %C(green)%h%Creset %C(magenta)%ai%Creset %C(cyan)%an%Creset een)%D%Creset %s' -M --follow -- {} | \
     fzf --sync --ansi --with-nth=2.. --preview-window='top,80%' --bind='ctrl-f:preview-page-down,ctrl-b:preview-page-up' --preview 'git show --color=always {2}~..{2} {1}' > /dev/null; }; f"
   au = add -u
   ca = commit --amend
@@ -42,9 +43,23 @@
 [core]
   editor = nvim
   excludesFile = ~/.gitignore_global
+  symlinks = true
+
+  pager = delta
 [difftool]
   prompt = true
 [diff]
   tool = nvimdiff
 [difftool "nvimdiff"]
-  cmd = "nvim -d \"$LOCAL\" \"$REMOTE\""
+  cmd = nvim -d \"$LOCAL\" \"$REMOTE\"
+
+[interactive]
+    diffFilter = delta --color-only
+[delta]
+    navigate = true  # use n and N to move between diff sections
+    dark = true      # or light = true, or omit for auto-detection
+    side-by-side = true
+    line-numbers = true
+    line-numbers-left-format = ""
+; [merge]
+;     conflictStyle = zdiff3
