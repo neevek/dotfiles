@@ -1,14 +1,40 @@
 function get_git_info() {
-  br=$(git branch 2> /dev/null | awk -F'[ )]' '/^\*/{br=$2}/HEAD detached/{br=$(NF-1)}END{print br}')
-  mcount=$(git status --porcelain 2> /dev/null | grep -cv '^?')
-  if [[ $mcount -ne 0 ]]; then
-    echo -e "(%{$fg_bold[green]%}$br%{$reset_color%}|%{$fg[red]%}$mcount%{$reset_color%})"
-  elif [[ ! -z "$br" ]]; then
-    echo -e "(%{$fg_bold[green]%}$br%{$reset_color%})"
-  fi
+  local dir git_file git_dir head_line branch
+
+  dir=$PWD
+
+  while [[ "$dir" != "/" ]]; do
+    if [[ -d "$dir/.git" ]]; then
+      git_dir="$dir/.git"
+      break
+    elif [[ -f "$dir/.git" ]]; then
+      IFS= read -r git_file < "$dir/.git" || return
+      case "$git_file" in
+        'gitdir: '*)
+          git_dir="${git_file#gitdir: }"
+          [[ "$git_dir" != /* ]] && git_dir="$dir/$git_dir"
+          break
+          ;;
+        *)
+          return
+          ;;
+      esac
+    fi
+    dir=${dir:h}
+  done
+
+  [[ -n "$git_dir" && -r "$git_dir/HEAD" ]] || return
+
+  IFS= read -r head_line < "$git_dir/HEAD" || return
+  case "$head_line" in
+    'ref: refs/heads/'*)
+      branch="${head_line#ref: refs/heads/}"
+      echo "(%{$fg_bold[green]%}${branch}%{$reset_color%})"
+      ;;
+  esac
 }
 
-PROMPT='[%{$fg[green]%}%n%{$reset_color%}%{$reset_color%}@%{$fg[green]%}%M%{$reset_color%}:%{$fg[cyan]%}%~%{$reset_color%}$(get_git_info)%{$reset_color%}]$ '
+PROMPT='[%{$fg[green]%}%n%{$reset_color%}@%{$fg[green]%}%M%{$reset_color%}:%{$fg[cyan]%}%~%{$reset_color%}$(get_git_info)]$ '
 
 ZSH_THEME_GIT_PROMPT_REFIX="%{$fg_bold[green]%}"
 ZSH_THEME_GIT_PROMPT_SUFFIX="%{$reset_color%}"
