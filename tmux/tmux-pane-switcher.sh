@@ -48,7 +48,6 @@ branch_of() {
 cyan=$(printf '\033[36m')
 green=$(printf '\033[32m')
 gray=$(printf '\033[90m')
-yellow=$(printf '\033[33m')
 reset=$(printf '\033[0m')
 
 # Pre-compute set of pane IDs running claude or codex.
@@ -98,10 +97,16 @@ target=$(
       "$HOME"*) path="~${path#"$HOME"}" ;;
     esac
 
-    # AI icon if pane is running claude or codex
+    # AI icon: ✨ if working, ● if idle
     icon=""
     case "$ai_panes" in
-      *" $pane_id "*) icon="${yellow}*${reset} " ;;
+      *" $pane_id "*)
+        last_line=$(tmux capture-pane -t "$pane_id" -p 2>/dev/null | awk 'NF{line=$0} END{print line}')
+        case "$last_line" in
+          *"esc to interrupt"*) icon="✨ " ;;
+          *) icon="● " ;;
+        esac
+        ;;
     esac
 
     if [ -n "$branch" ]; then

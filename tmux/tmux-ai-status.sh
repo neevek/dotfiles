@@ -64,11 +64,19 @@ while read -r win pane_ids; do
   ai_windows[$win]=$state
 done <<< "$ai_info"
 
-# Step 3: update @ai_state on every window
+# Step 3: read current @ai_state for all windows in one call
+declare -A current_state
+while IFS=$'\t' read -r win state; do
+  current_state[$win]=$state
+done < <(tmux list-windows -a -F "#{session_name}:#{window_index}	#{@ai_state}")
+
+# Step 4: only update @ai_state when it actually changed
 for win in $all_windows; do
+  cur="${current_state[$win]}"
   if [ -n "${ai_windows[$win]+x}" ]; then
-    tmux set-option -w -t "$win" @ai_state "${ai_windows[$win]}" 2>/dev/null
+    want="${ai_windows[$win]}"
+    [ "$cur" != "$want" ] && tmux set-option -w -t "$win" @ai_state "$want" 2>/dev/null
   else
-    tmux set-option -wu -t "$win" @ai_state 2>/dev/null
+    [ -n "$cur" ] && tmux set-option -wu -t "$win" @ai_state 2>/dev/null
   fi
 done
