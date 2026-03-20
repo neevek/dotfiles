@@ -103,7 +103,7 @@ target=$(
       *" $pane_id "*)
         last_line=$(tmux capture-pane -t "$pane_id" -p 2>/dev/null | awk 'NF{line=$0} END{print line}')
         case "$last_line" in
-          *"esc to interrupt"*) icon="✨ " ;;
+          *"esc to interrupt"*) icon="✨" ;;
           *) icon="● " ;;
         esac
         ;;
