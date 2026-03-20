@@ -50,39 +50,13 @@ green=$(printf '\033[32m')
 gray=$(printf '\033[90m')
 reset=$(printf '\033[0m')
 
-# Pre-compute set of pane IDs running claude or codex.
-# Single ps call: find claude/codex PIDs, walk ppid chain up to a pane PID.
-ai_panes=" $(
-  {
-    tmux list-panes -a -F "PANE #{pane_pid} #{pane_id}"
-    ps -eo pid=,ppid=,command=
-  } | awk '
-    /^PANE / { pane[$2] = $3; next }
-    {
-      pid = $1; ppid = $2
-      cmd = ""; for (i = 3; i <= NF; i++) cmd = cmd (i>3?" ":"") $i
-      parent[pid] = ppid
-      cmds[pid] = cmd
-    }
-    END {
-      # find all claude/codex PIDs
-      for (pid in cmds) {
-        c = tolower(cmds[pid])
-        if (c ~ /claude/ || c ~ /codex/) ai[pid] = 1
-      }
-      # walk each AI pid up the ppid chain to find its pane
-      for (pid in ai) {
-        p = pid
-        for (i = 0; i < 50 && p > 1; i++) {
-          if (p in pane) { found[pane[p]] = 1; break }
-          if (!(p in parent)) break
-          p = parent[p]
-        }
-      }
-      for (id in found) printf "%s ", id
-    }
-  '
-) "
+DETECT_SCRIPT="${TMUX_AI_DETECT_SCRIPT:-$HOME/.config/tmux/tmux-ai-detect.sh}"
+pane_states=$("$DETECT_SCRIPT" --mode panes 2>/dev/null || true)
+
+state_of_pane() {
+  local pane_id=$1
+  printf '%s\n' "$pane_states" | awk -F '\t' -v id="$pane_id" '$1 == id { print $2; exit }'
+}
 
 # Build the pane list:
 #   hidden_pane_id \t colored_display_line
@@ -91,6 +65,7 @@ target=$(
   tmux list-panes -a -F "#{pane_id}	#{window_index}	#{window_name}	#{pane_current_path}" |
   while IFS=$'\t' read -r pane_id win_idx win_name path; do
     branch=$(branch_of "$path")
+    state=$(state_of_pane "$pane_id")
 
     # shorten home dir to ~
     case "$path" in
@@ -99,14 +74,9 @@ target=$(
 
     # AI icon: ✨ if working, ● if idle
     icon=""
-    case "$ai_panes" in
-      *" $pane_id "*)
-        last_line=$(tmux capture-pane -t "$pane_id" -p 2>/dev/null | awk 'NF{line=$0} END{print line}')
-        case "$last_line" in
-          *"esc to interrupt"*) icon="✨" ;;
-          *) icon="● " ;;
-        esac
-        ;;
+    case "$state" in
+      working) icon="✨" ;;
+      idle) icon="● " ;;
     esac
 
     if [ -n "$branch" ]; then
@@ -125,10 +95,7 @@ target=$(
     fi
 
     # Sort key: 0 for AI panes, 1 for others
-    case "$ai_panes" in
-      *" $pane_id "*) sort_key=0 ;;
-      *) sort_key=1 ;;
-    esac
+    [ -n "$state" ] && sort_key=0 || sort_key=1
 
     printf "%s\t%s\t%s\n" "$sort_key" "$pane_id" "$display"
   done |

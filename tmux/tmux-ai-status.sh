@@ -4,79 +4,32 @@
 # Sets @ai_state on each window: "working", "idle", or removes it.
 # Use in window-status-format:
 #   #{?#{==:#{@ai_state},working},✨ ,#{?#{==:#{@ai_state},idle},● ,}}
+DETECT_SCRIPT="${TMUX_AI_DETECT_SCRIPT:-$HOME/.config/tmux/tmux-ai-detect.sh}"
 
-# Step 1: find AI pane IDs, grouped by window (session:window_index)
-ai_info=$(
-  {
-    tmux list-panes -a -F "PANE #{pane_pid} #{pane_id} #{session_name}:#{window_index}"
-    ps -eo pid=,ppid=,command=
-  } | awk '
-    /^PANE / { pane_pid[$2] = $3; pane_win[$2] = $4; next }
-    {
-      pid = $1; ppid = $2
-      cmd = ""; for (i = 3; i <= NF; i++) cmd = cmd (i>3?" ":"") $i
-      parent[pid] = ppid
-      cmds[pid] = cmd
-    }
-    END {
-      for (pid in cmds) {
-        c = tolower(cmds[pid])
-        if (c ~ /claude/ || c ~ /codex/) ai[pid] = 1
-      }
-      for (pid in ai) {
-        p = pid
-        for (i = 0; i < 50 && p > 1; i++) {
-          if (p in pane_pid) {
-            id = pane_pid[p]
-            win = pane_win[p]
-            # record pane_id per window (may have multiple)
-            if (!(win in win_panes))
-              win_panes[win] = id
-            else
-              win_panes[win] = win_panes[win] " " id
-            break
-          }
-          if (!(p in parent)) break
-          p = parent[p]
-        }
-      }
-      for (win in win_panes) print win, win_panes[win]
-    }'
-)
+window_wants=$("$DETECT_SCRIPT" --mode windows 2>/dev/null || true)
+window_current=$(tmux list-windows -a -F "#{session_name}:#{window_index}	#{@ai_state}")
 
-# Collect all windows so we can clear stale @ai_state
-all_windows=$(tmux list-windows -a -F "#{session_name}:#{window_index}")
+get_window_state() {
+  local source="$1"
+  local win="$2"
+  printf '%s\n' "$source" | awk -F '\t' -v w="$win" '$1 == w { print $2; exit }'
+}
 
-# Build set of windows that have AI panes
-declare -A ai_windows
-
-# Step 2: for each AI window, check pane content to determine state
-while read -r win pane_ids; do
+tmux list-windows -a -F "#{session_name}:#{window_index}" | while IFS= read -r win; do
   [ -z "$win" ] && continue
-  state="idle"
-  for pane_id in $pane_ids; do
-    # Only check the LAST non-empty line — older visible output may contain stale matches
-    last_line=$(tmux capture-pane -t "$pane_id" -p 2>/dev/null | awk 'NF{line=$0} END{print line}')
-    case "$last_line" in
-      *"esc to interrupt"*) state="working"; break ;;
-    esac
-  done
-  ai_windows[$win]=$state
-done <<< "$ai_info"
 
-# Step 3: read current @ai_state for all windows in one call
-declare -A current_state
-while IFS=$'\t' read -r win state; do
-  current_state[$win]=$state
-done < <(tmux list-windows -a -F "#{session_name}:#{window_index}	#{@ai_state}")
+  want=$(get_window_state "$window_wants" "$win")
+  cur=$(get_window_state "$window_current" "$win")
 
-# Step 4: only update @ai_state when it actually changed
-for win in $all_windows; do
-  cur="${current_state[$win]}"
-  if [ -n "${ai_windows[$win]+x}" ]; then
-    want="${ai_windows[$win]}"
-    [ "$cur" != "$want" ] && tmux set-option -w -t "$win" @ai_state "$want" 2>/dev/null
+  if [ -n "$want" ]; then
+    if [ "$cur" != "$want" ]; then
+      tmux set-option -w -t "$win" @ai_state "$want" 2>/dev/null
+    fi
   else
-    [ -n "$cur" ] && tmux set-option -wu -t "$win" @ai_state 2>/dev/null
+    if [ -n "$cur" ]; then
+      tmux set-option -wu -t "$win" @ai_state 2>/dev/null
+    fi
   fi
 done
+
+exit 0
