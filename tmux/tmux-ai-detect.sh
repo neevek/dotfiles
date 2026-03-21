@@ -63,17 +63,126 @@ ai_panes=$(
       sub(/[[:space:]]+$/, "", s)
       return s
     }
-    function contains_ai_cmd(cmdline, lower_cmd, i, token) {
-      lower_cmd = tolower(cmdline)
-      for (i = 1; i <= allow_n; i++) {
-        token = allow[i]
-        if (token != "" && index(lower_cmd, token) > 0) return 1
+
+    function normalize_cmd(cmd, s) {
+      s = trim(cmd)
+      if (s == "") return ""
+      gsub(/^.*[\/\\]/, "", s)
+      return tolower(s)
+    }
+
+    function sanitize_token(token, s) {
+      s = token
+      gsub(/^[[:space:]\"\047]+/, "", s)
+      gsub(/[[:space:]\"\047]+$/, "", s)
+      while (s ~ /^[\[\](){}<>,;]/) s = substr(s, 2)
+      while (s ~ /[\[\](){}<>,;]$/) s = substr(s, 1, length(s) - 1)
+      return s
+    }
+
+    function is_wrapper_launcher(cmd) {
+      return cmd == "node" || cmd == "npx" || cmd == "npm" || cmd == "pnpm" || \
+             cmd == "yarn" || cmd == "bun" || cmd == "deno" || cmd == "python" || \
+             cmd == "python3" || cmd == "uvx" || cmd == "pipx" || cmd == "env"
+    }
+
+    function candidate_from_cmdline_token(token, cleaned, candidate, at) {
+      cleaned = sanitize_token(token)
+
+      if (cleaned == "" || substr(cleaned, 1, 1) == "-" || index(cleaned, "://") > 0) {
+        return ""
       }
+
+      if (index(cleaned, "=") > 0) {
+        return ""
+      }
+
+      candidate = normalize_cmd(cleaned)
+      at = index(candidate, "@")
+      if (at > 1) {
+        candidate = substr(candidate, 1, at - 1)
+      }
+
+      if (candidate == "") return ""
+      return candidate
+    }
+
+    function wrapper_entry_token(tokens, tok_n, idx, cleaned, prev_module_flag, looks_like_entry) {
+      prev_module_flag = 0
+
+      for (idx = 2; idx <= tok_n; idx++) {
+        cleaned = sanitize_token(tokens[idx])
+        if (cleaned == "") {
+          continue
+        }
+
+        if (cleaned == "--") {
+          prev_module_flag = 0
+          continue
+        }
+
+        if (substr(cleaned, 1, 1) == "-") {
+          prev_module_flag = (cleaned == "-m")
+          continue
+        }
+
+        if (index(cleaned, "=") > 0) {
+          prev_module_flag = 0
+          continue
+        }
+
+        looks_like_entry = idx == 2 || prev_module_flag || index(cleaned, "/") > 0 || \
+                           index(cleaned, "\\") > 0 || substr(cleaned, 1, 1) == "@" || \
+                           cleaned ~ /\.js$/ || cleaned ~ /\.mjs$/ || cleaned ~ /\.cjs$/ || \
+                           cleaned ~ /\.ts$/ || cleaned ~ /\.py$/
+
+        prev_module_flag = 0
+        if (looks_like_entry) {
+          return tokens[idx]
+        }
+      }
+
+      return ""
+    }
+
+    function contains_ai_cmd(cmdline, tok_n, exe, entry_tok, entry, i, j, n_candidates, token) {
+      delete cmd_tokens
+      tok_n = split(cmdline, cmd_tokens, /[[:space:]]+/)
+      if (tok_n < 1) {
+        return 0
+      }
+
+      delete candidates
+      n_candidates = 0
+      exe = candidate_from_cmdline_token(cmd_tokens[1])
+      if (exe != "") {
+        candidates[++n_candidates] = exe
+
+        if (is_wrapper_launcher(exe)) {
+          entry_tok = wrapper_entry_token(cmd_tokens, tok_n)
+          if (entry_tok != "") {
+            entry = candidate_from_cmdline_token(entry_tok)
+            if (entry != "") {
+              candidates[++n_candidates] = entry
+            }
+          }
+        }
+      }
+
+      for (i = 1; i <= n_candidates; i++) {
+        for (j = 1; j <= allow_n; j++) {
+          token = allow[j]
+          if (token != "" && candidates[i] == token) return 1
+        }
+      }
+
       return 0
     }
     BEGIN {
       allow_n = split(allowlist, raw, ",")
-      for (i = 1; i <= allow_n; i++) allow[i] = tolower(trim(raw[i]))
+      for (i = 1; i <= allow_n; i++) {
+        allow[i] = normalize_cmd(raw[i])
+      }
     }
     $1 == "P" {
       pane_pid[$2] = $3
