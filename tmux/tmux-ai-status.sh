@@ -9,17 +9,47 @@ DETECT_SCRIPT="${TMUX_AI_DETECT_SCRIPT:-$HOME/.config/tmux/tmux-ai-detect.sh}"
 window_wants=$("$DETECT_SCRIPT" --mode windows 2>/dev/null || true)
 window_current=$(tmux list-windows -a -F "#{session_name}:#{window_index}	#{@ai_state}")
 
-get_window_state() {
-  local source="$1"
-  local win="$2"
-  printf '%s\n' "$source" | awk -F '\t' -v w="$win" '$1 == w { print $2; exit }'
+lookup_mode="list"
+if [ "${BASH_VERSINFO[0]:-0}" -ge 4 ]; then
+  declare -A want_map
+  while IFS=$'\t' read -r win state; do
+    [ -z "$win" ] && continue
+    want_map["$win"]="$state"
+  done <<< "$window_wants"
+  lookup_mode="map"
+else
+  want_ids=()
+  want_states=()
+  while IFS=$'\t' read -r win state; do
+    [ -z "$win" ] && continue
+    want_ids+=("$win")
+    want_states+=("$state")
+  done <<< "$window_wants"
+fi
+
+WANT_STATE=""
+lookup_want_state() {
+  local win=$1
+  local i
+  WANT_STATE=""
+  if [ "$lookup_mode" = "map" ]; then
+    WANT_STATE="${want_map[$win]-}"
+    return
+  fi
+
+  for ((i = 0; i < ${#want_ids[@]}; i++)); do
+    if [ "${want_ids[$i]}" = "$win" ]; then
+      WANT_STATE="${want_states[$i]}"
+      return
+    fi
+  done
 }
 
-tmux list-windows -a -F "#{session_name}:#{window_index}" | while IFS= read -r win; do
+while IFS=$'\t' read -r win cur; do
   [ -z "$win" ] && continue
 
-  want=$(get_window_state "$window_wants" "$win")
-  cur=$(get_window_state "$window_current" "$win")
+  lookup_want_state "$win"
+  want=$WANT_STATE
 
   if [ -n "$want" ]; then
     if [ "$cur" != "$want" ]; then
@@ -30,6 +60,6 @@ tmux list-windows -a -F "#{session_name}:#{window_index}" | while IFS= read -r w
       tmux set-option -wu -t "$win" @ai_state 2>/dev/null
     fi
   fi
-done
+done <<< "$window_current"
 
 exit 0
