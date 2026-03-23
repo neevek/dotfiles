@@ -1,17 +1,71 @@
 [user]
   email = i@neevek.net
   name = neevek
-[http]
-  ; proxy = http://192.168.50.4:9800
+; [http]
+;   proxy = http://127.0.0.1:9800
+; [https]
+;   proxy = http://127.0.0.1:9800
 [alias]
   ci = commit
   st = status
-  df = difftool
   d = diff
   dc = diff --cached
+  ; d  = -c diff.external=difft diff
+  ; dc = -c diff.external=difft diff --cached
+  ; # `git log` with patches shown with difftastic.
+  ; dl = -c diff.external=difft log -p --ext-diff
+  ; # Show the most recent commit with difftastic.
+  ; ds = -c diff.external=difft show --ext-diff
+
   co = checkout
   lg = log --all --color --graph --decorate --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --
-  review = "!f() { git push origin HEAD:refs/for/\"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
+  ; contniue review
+  review = "!f() { git push origin HEAD:refs/for/$1/\"$(git rev-parse --abbrev-ref HEAD)\"; }; f"
+  review-multiple = "!f() { \
+    target=$(git rev-parse --abbrev-ref HEAD); \
+    i=0; \
+    for commit in \"$@\"; do \
+      i=$((i + 1)); \
+      short=$(git rev-parse --short $commit); \
+      review_branch=\"review/xiejm/$short\"; \
+      git checkout -b \"$review_branch\" \"origin/$target\" \
+        && git cherry-pick \"$commit\" \
+        && git push origin HEAD:refs/for/$target/review-$i \
+        && git checkout \"$target\" \
+        && git branch -D \"$review_branch\" \
+        || { \
+          git cherry-pick --abort 2>/dev/null; \
+          git checkout \"$target\"; \
+          git branch -D \"$review_branch\" 2>/dev/null; \
+          echo \"Failed for $commit\"; \
+          return 1; \
+        }; \
+    done; \
+  }; f"
+  ; cleanup merged review/xiejm/* branches (local + remote)
+  review-cleanup = "!f() { \
+    target=${1:-$(git rev-parse --abbrev-ref HEAD)}; \
+    deleted=0; \
+    for b in $(git branch --list 'review/xiejm/*' | sed 's/^[* ]*//'); do \
+      if git merge-base --is-ancestor \"$b\" \"origin/$target\" 2>/dev/null; then \
+        echo \"Deleting $b (merged into $target)\"; \
+        git branch -D \"$b\"; \
+        git push origin --delete \"$b\" 2>/dev/null || true; \
+        deleted=$((deleted + 1)); \
+      fi; \
+    done; \
+    [ $deleted -eq 0 ] && echo 'No merged review/* branches found.'; \
+  }; f"
+  ; create review
+  reviewc = "!f(){ \
+    [ -z \"$1\" ] && { echo \"Usage: git review <target-branch>\" >&2; return 1; }; \
+    src=$(git rev-parse --abbrev-ref HEAD); \
+    [ \"$src\" = \"$1\" ] && { echo \"Source and target must differ.\" >&2; return 1; }; \
+    git push --force-with-lease -u origin HEAD \
+      --push-option=merge_request.create \
+      --push-option=merge_request.target=\"$1\"; \
+  }; f"
+
   fco = "!f() { git fetch origin $1 && git checkout $1 && git pull --rebase origin $1; }; f"
   pl = "!f() { git pull --rebase origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
   ps = "!f() { git push origin \"${1:-$(git rev-parse --abbrev-ref HEAD)}\"; }; f"
