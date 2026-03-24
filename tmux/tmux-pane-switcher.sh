@@ -282,8 +282,8 @@ while IFS=$'\t' read -r pane_id win_idx win_name path; do
 
   icon=""
   case "$state" in
-    working) icon="✨" ;;
-    idle) icon="● " ;;
+    working) icon="${green}●${reset} " ;;
+    idle) icon="${gray}●${reset} " ;;
   esac
 
   if [ -n "$branch" ]; then

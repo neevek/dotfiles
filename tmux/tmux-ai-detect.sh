@@ -5,8 +5,8 @@
 #   --mode windows -> outputs "<session:window>\t<state>"
 #
 # States:
-#   working: recent bottom lines contain interrupt hints ("esc to interrupt")
-#   idle:    pane is AI-associated but interrupt hint is not visible
+#   working: AI process is actively executing (shell children or pane output changing)
+#   idle:    pane is AI-associated but not producing output
 
 mode="windows"
 if [ "$1" = "--mode" ] && [ -n "$2" ]; then
@@ -24,33 +24,34 @@ esac
 allowlist=$(tmux show-option -gqv @ai_commands 2>/dev/null)
 [ -z "$allowlist" ] && allowlist="claude,codex"
 
-pane_has_interrupt_marker() {
+# Content-delta state: hash of pane output (excluding input box) per invocation.
+hash_file="${TMPDIR:-/tmp}/tmux-ai-detect-hash.tsv"
+declare -A prev_hash
+if [ -r "$hash_file" ]; then
+  while IFS=$'\t' read -r _pid _hash; do
+    [ -z "$_pid" ] && continue
+    prev_hash["$_pid"]="$_hash"
+  done < "$hash_file"
+fi
+
+# Capture pane content above the input box and return a checksum.
+# The input box (❯ prompt + status lines) is stripped so user typing
+# does not affect the hash — only program output changes it.
+pane_content_hash() {
   local pane_id="$1"
-  tmux capture-pane -t "$pane_id" -p -e -S -120 2>/dev/null | awk -v scan_lines=6 '
-    function strip_ansi(s) {
-      gsub(/\r/, "", s)
-      gsub(/\033\[[0-9;?]*[ -\/]*[@-~]/, "", s)
-      gsub(/\033\][^\a]*\a/, "", s)
-      gsub(/\033\][^\033]*\033\\/, "", s)
-      return s
-    }
-    {
-      line = tolower(strip_ansi($0))
-      if (line ~ /[^[:space:]]/) recent[++n] = line
-    }
+  tmux capture-pane -t "$pane_id" -p -S -50 2>/dev/null | awk '
+    { lines[++n] = $0 }
     END {
-      start = n - scan_lines + 1
-      if (start < 1) start = 1
-      for (i = n; i >= start; i--) {
-        if (index(recent[i], "esc to interrupt") ||
-            index(recent[i], "ctrl+c to interrupt") ||
-            index(recent[i], "ctrl-c to interrupt")) {
-          print "1"
-          exit
-        }
+      # Find last prompt ❯ (U+276F = E2 9D AF) in bottom 12 lines.
+      cut = n
+      for (i = n; i >= 1 && i >= n - 12; i--) {
+        s = lines[i]
+        sub(/^[[:space:]]+/, "", s)
+        if (substr(s, 1, 3) == "\342\235\257") { cut = i - 1; break }
       }
-      print "0"
-    }'
+      for (i = 1; i <= cut; i++) print lines[i]
+    }
+  ' | cksum | cut -d' ' -f1
 }
 
 ai_panes=$(
@@ -178,6 +179,14 @@ ai_panes=$(
 
       return 0
     }
+
+    function is_shell_cmd(cmdline,    toks, n, exe) {
+      n = split(cmdline, toks, /[[:space:]]+/)
+      if (n < 1) return 0
+      exe = normalize_cmd(toks[1])
+      return (exe == "sh" || exe == "bash" || exe == "zsh" || exe == "fish" || exe == "dash")
+    }
+
     BEGIN {
       allow_n = split(allowlist, raw, ",")
       for (i = 1; i <= allow_n; i++) {
@@ -195,6 +204,9 @@ ai_panes=$(
       cmdline = ""
       for (i = 3; i <= NF; i++) cmdline = cmdline (i > 3 ? " " : "") $i
       parent[pid] = ppid
+      n_children[ppid]++
+      child_pid[ppid, n_children[ppid]] = pid
+      cmd_by_pid[pid] = cmdline
       if (contains_ai_cmd(cmdline)) ai_pid[pid] = 1
       next
     }
@@ -206,7 +218,15 @@ ai_panes=$(
             pane = pane_pid[cur]
             win = pane_win[cur]
             if (!(pane in emitted)) {
-              print pane "\t" win
+              active = 0
+              for (j = 1; j <= n_children[pid]; j++) {
+                kid = child_pid[pid, j]
+                if (kid in cmd_by_pid && is_shell_cmd(cmd_by_pid[kid])) {
+                  active = 1
+                  break
+                }
+              }
+              print pane "\t" win "\t" active
               emitted[pane] = 1
             }
             break
@@ -220,19 +240,48 @@ ai_panes=$(
 
 declare -A pane_state
 declare -A window_state
+declare -A current_hash
 
-while IFS=$'\t' read -r pane_id win_id; do
+while IFS=$'\t' read -r pane_id win_id is_active; do
   [ -z "$pane_id" ] && continue
-  if [ "$(pane_has_interrupt_marker "$pane_id")" = "1" ]; then
+
+  if [ "$is_active" = "1" ]; then
+    # Shell children → actively executing tools.
     pane_state["$pane_id"]="working"
     window_state["$win_id"]="working"
   else
-    pane_state["$pane_id"]="idle"
-    if [ -z "${window_state[$win_id]+x}" ]; then
-      window_state["$win_id"]="idle"
+    # No children — check if pane output changed since last invocation.
+    hash=$(pane_content_hash "$pane_id")
+    current_hash["$pane_id"]="$hash"
+    prev="${prev_hash[$pane_id]-}"
+
+    if [ -n "$prev" ] && [ "$hash" != "$prev" ]; then
+      pane_state["$pane_id"]="working"
+      window_state["$win_id"]="working"
+    else
+      pane_state["$pane_id"]="idle"
+      if [ -z "${window_state[$win_id]+x}" ]; then
+        window_state["$win_id"]="idle"
+      fi
     fi
   fi
 done <<< "$ai_panes"
+
+# Persist hashes for next invocation (skip if unchanged).
+hash_changed=0
+for pane_id in "${!current_hash[@]}"; do
+  if [ "${current_hash[$pane_id]}" != "${prev_hash[$pane_id]-}" ]; then
+    hash_changed=1; break
+  fi
+done
+if [ "$hash_changed" -eq 1 ]; then
+  hash_tmp="${hash_file}.tmp.$$"
+  trap 'rm -f "$hash_tmp" 2>/dev/null' EXIT
+  for pane_id in "${!current_hash[@]}"; do
+    printf "%s\t%s\n" "$pane_id" "${current_hash[$pane_id]}" >> "$hash_tmp"
+  done
+  mv -f "$hash_tmp" "$hash_file" 2>/dev/null || true
+fi
 
 if [ "$mode" = "panes" ]; then
   for pane_id in "${!pane_state[@]}"; do
