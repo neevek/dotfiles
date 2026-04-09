@@ -2,23 +2,28 @@
 # Set AI-aware window tab colors after tmux2k loads.
 # Called once via run-shell in tmux.conf (after tpm).
 
-L=$(printf '\xee\x82\xb6')  # U+E0B6 powerline left half-circle
-R=$(printf '\xee\x82\xb4')  # U+E0B4 powerline right half-circle
-SBG="#000000"                # status bar background
+set -euo pipefail
 
-# 3-way conditional helper: working / idle / default
-c() { echo "#{?#{==:#{@ai_state},working},$1,#{?#{==:#{@ai_state},idle},$2,$3}}"; }
+readonly L=$'\xee\x82\xb6'   # U+E0B6 powerline left half-circle
+readonly R=$'\xee\x82\xb4'   # U+E0B4 powerline right half-circle
+readonly SBG="#000000"       # status bar background
 
-# --- Non-current windows ---
-BG=$(c '#e65c00' '#554488' '#3f3f4f')   # working=orange, idle=purple, normal=gray
-FG=$(c '#ffffff' '#ccccdd' '#ffffff')
+# 3-way conditionals, expanded once to avoid command-substitution overhead.
+readonly NON_CURRENT_BG="#{?#{==:#{@ai_state},working},#e65c00,#{?#{==:#{@ai_state},idle},#554488,#3f3f4f}}"  # working=orange, idle=purple, normal=gray
+readonly NON_CURRENT_FG="#{?#{==:#{@ai_state},working},#ffffff,#{?#{==:#{@ai_state},idle},#ccccdd,#ffffff}}"
+readonly CURRENT_BG="#{?#{==:#{@ai_state},working},#ff7700,#{?#{==:#{@ai_state},idle},#7766aa,#1688f0}}"      # working=bright orange, idle=bright purple, normal=blue
+readonly CURRENT_FG="#{?#{==:#{@ai_state},working},#000000,#{?#{==:#{@ai_state},idle},#ffffff,#000000}}"
 
-tmux set -g window-status-format \
-  "#[fg=${BG},bg=${SBG}]${L}#[bg=${BG}]#{?window_flags,#[fg=#ff1f1f]#{window_flags},}#[fg=${FG}]#I:#W#[fg=${BG},bg=${SBG}]${R}"
+readonly WINDOW_STATUS_FORMAT="#[fg=${NON_CURRENT_BG},bg=${SBG}]${L}#[bg=${NON_CURRENT_BG}]#{?window_flags,#[fg=#ff1f1f]#{window_flags},}#[fg=${NON_CURRENT_FG}]#I:#W#[fg=${NON_CURRENT_BG},bg=${SBG}]${R}"
+readonly WINDOW_STATUS_CURRENT_FORMAT="#[fg=${CURRENT_BG},bg=${SBG}]${L}#[bg=${CURRENT_BG}]#{?window_flags,#[fg=#ccffcc]#{window_flags},}#[fg=${CURRENT_FG}]#I:#W#[fg=${CURRENT_BG},bg=${SBG}]${R}"
 
-# --- Current window ---
-BG=$(c '#ff7700' '#7766aa' '#1688f0')   # working=bright orange, idle=bright purple, normal=blue
-FG=$(c '#000000' '#ffffff' '#000000')
+current_window_status_format="$(tmux show -gv window-status-format 2>/dev/null || true)"
+current_window_status_current_format="$(tmux show -gv window-status-current-format 2>/dev/null || true)"
 
-tmux set -g window-status-current-format \
-  "#[fg=${BG},bg=${SBG}]${L}#[bg=${BG}]#{?window_flags,#[fg=#ccffcc]#{window_flags},}#[fg=${FG}]#I:#W#[fg=${BG},bg=${SBG}]${R}"
+if [ "${current_window_status_format}" = "${WINDOW_STATUS_FORMAT}" ] &&
+  [ "${current_window_status_current_format}" = "${WINDOW_STATUS_CURRENT_FORMAT}" ]; then
+  exit 0
+fi
+
+tmux set -g window-status-format "${WINDOW_STATUS_FORMAT}" \;\
+  set -g window-status-current-format "${WINDOW_STATUS_CURRENT_FORMAT}"

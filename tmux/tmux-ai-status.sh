@@ -45,6 +45,16 @@ lookup_want_state() {
   done
 }
 
+tmux_cmd=(tmux)
+tmux_cmd_count=0
+append_tmux_cmd() {
+  if [ "$tmux_cmd_count" -gt 0 ]; then
+    tmux_cmd+=(';')
+  fi
+  tmux_cmd+=("$@")
+  tmux_cmd_count=$((tmux_cmd_count + 1))
+}
+
 while IFS=$'\t' read -r win cur; do
   [ -z "$win" ] && continue
 
@@ -53,13 +63,17 @@ while IFS=$'\t' read -r win cur; do
 
   if [ -n "$want" ]; then
     if [ "$cur" != "$want" ]; then
-      tmux set-option -w -t "$win" @ai_state "$want" 2>/dev/null
+      append_tmux_cmd set-option -w -t "$win" @ai_state "$want"
     fi
   else
     if [ -n "$cur" ]; then
-      tmux set-option -wu -t "$win" @ai_state 2>/dev/null
+      append_tmux_cmd set-option -wu -t "$win" @ai_state
     fi
   fi
 done <<< "$window_current"
+
+if [ "$tmux_cmd_count" -gt 0 ]; then
+  "${tmux_cmd[@]}" 2>/dev/null || true
+fi
 
 exit 0
