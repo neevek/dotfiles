@@ -98,22 +98,20 @@
   editor = nvim
   excludesFile = ~/.gitignore_global
   symlinks = true
+  ; sshCommand = ssh -o ProxyCommand=\"nc -x 127.0.0.1:29900 %h %p\"
 
-  pager = delta
-[difftool]
-  prompt = true
-[diff]
-  tool = nvimdiff
-[difftool "nvimdiff"]
-  cmd = nvim -d \"$LOCAL\" \"$REMOTE\"
+; [difftool]
+;   prompt = true
+;
+; [pager]
+;     difftool = true
+;
+; [diff]
+;     external = difft
+;     tool = difftastic
+;
+; [difftool "nvimdiff"]
+;   cmd = nvim -d \"$LOCAL\" \"$REMOTE\"
 
-[interactive]
-    diffFilter = delta --color-only
-[delta]
-    navigate = true  # use n and N to move between diff sections
-    dark = true      # or light = true, or omit for auto-detection
-    side-by-side = true
-    line-numbers = true
-    line-numbers-left-format = ""
 ; [merge]
 ;     conflictStyle = zdiff3

@@ -5,25 +5,27 @@ draw_bold_text_with_bright_colors = true
 
 [colors.primary]
 background = "#000000"
-foreground = "#33ff33"
+foreground = "#aaaaaa"
 
 [font]
 builtin_box_drawing = true
-size = 16
+size = 14
 
 [font.normal]
-family = "Lekton Nerd Font"
+family = "ZedMono Nerd Font Mono"
 
 [font.offset]
 y = 1
 x = 0
 
 [font.bold]
-family = "Lekton Nerd Font"
+# family = "Lekton Nerd Font Mono"
+family = "ZedMono Nerd Font Mono"
 
 [font.italic]
-family = "Lekton Nerd Font"
 style = "Italic"
+# family = "Lekton Nerd Font Mono"
+family = "ZedMono Nerd Font Mono"
 
 [scrolling]
 history = 50000
