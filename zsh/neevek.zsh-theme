@@ -34,7 +34,8 @@ function get_git_info() {
   esac
 }
 
-PROMPT='[%{$fg[green]%}%n%{$reset_color%}@%{$fg[green]%}%M%{$reset_color%}:%{$fg[cyan]%}%~%{$reset_color%}$(get_git_info)]$ '
+# PROMPT='[%{$fg[green]%}%n%{$reset_color%}@%{$fg[green]%}%M%{$reset_color%}:%{$fg[cyan]%}%~%{$reset_color%}$(get_git_info)]$'
+PROMPT=$'[%{$fg[green]%}%n%{$reset_color%}@%{$fg[green]%}%M%{$reset_color%}:%{$fg[cyan]%}%~%{$reset_color%}$(get_git_info)] \n$ '
 
 ZSH_THEME_GIT_PROMPT_REFIX="%{$fg_bold[green]%}"
 ZSH_THEME_GIT_PROMPT_SUFFIX="%{$reset_color%}"
