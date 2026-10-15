@@ -10,3 +10,6 @@
 [submodule "tmux/plugins/tmux-themepack"]
 	path = tmux/plugins/tmux-themepack
 	url = https://github.com/jimeh/tmux-themepack
+[submodule "tmux/plugins/tmux-continuum"]
+	path = tmux/plugins/tmux-continuum
+	url = https://github.com/tmux-plugins/tmux-continuum
