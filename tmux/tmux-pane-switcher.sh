@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tmux-pane-switcher: fuzzy-find tmux panes with live preview in a popup
+# tmux-pane-switcher: fuzzy-find windows and preview their last active pane
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 
@@ -14,26 +14,18 @@ green=$(printf '\033[32m')
 gray=$(printf '\033[90m')
 reset=$(printf '\033[0m')
 
-DETECT_SCRIPT="${TMUX_AI_DETECT_SCRIPT:-$HOME/.config/tmux/tmux-ai-detect.sh}"
-pane_rows=$(tmux list-panes -a -F "#{pane_id}	#{window_index}	#{window_name}	#{pane_current_path}" 2>/dev/null || true)
-[ -z "$pane_rows" ] && exit 0
-
-pane_states_tmp=""
-detect_pid=""
-cleanup_tmp() {
-  [ -n "$pane_states_tmp" ] && [ -f "$pane_states_tmp" ] && rm -f "$pane_states_tmp"
+source "$(dirname "$SCRIPT_PATH")/tmux-ai-palette.sh"
+ansi_foreground() {
+  local hex=${1#\#}
+  printf '\033[38;2;%d;%d;%dm' \
+    "$((16#${hex:0:2}))" "$((16#${hex:2:2}))" "$((16#${hex:4:2}))"
 }
-trap cleanup_tmp EXIT
+working_color=$(ansi_foreground "$TMUX_AI_WORKING_FG")
+idle_color=$(ansi_foreground "$TMUX_AI_IDLE_FG")
 
-if [ -x "$DETECT_SCRIPT" ] || [ -f "$DETECT_SCRIPT" ]; then
-  pane_states_tmp=$(mktemp "${TMPDIR:-/tmp}/tmux-pane-switcher-states.XXXXXX" 2>/dev/null || true)
-  if [ -n "$pane_states_tmp" ]; then
-    (
-      "$DETECT_SCRIPT" --mode panes >"$pane_states_tmp" 2>/dev/null || true
-    ) &
-    detect_pid=$!
-  fi
-fi
+# The status updater maintains @ai_state; opening the picker never scans agents.
+window_rows=$(tmux list-windows -a -F "#{session_id}:#{window_id}	#{session_name}:#{window_index}	#{window_name}	#{window_panes}	state=#{@ai_state}	#{pane_current_path}" 2>/dev/null || true)
+[ -z "$window_rows" ] && exit 0
 
 branch_none=$'\001'
 branch_lookup_mode="list"
@@ -215,112 +207,70 @@ branch_of_cached() {
   [ "$RESOLVED_BRANCH" = "$branch_none" ] || BRANCH_VALUE="$RESOLVED_BRANCH"
 }
 
-# Resolve git branches while AI state detection runs in parallel.
-while IFS=$'\t' read -r _ _ _ path; do
-  [ -z "$path" ] && continue
-  branch_of_cached "$path"
-done <<< "$pane_rows"
-
-if [ -n "$detect_pid" ]; then
-  wait "$detect_pid" 2>/dev/null || true
-fi
-
-pane_states=""
-if [ -n "$pane_states_tmp" ] && [ -f "$pane_states_tmp" ]; then
-  pane_states=$(cat "$pane_states_tmp" 2>/dev/null || true)
-elif [ -x "$DETECT_SCRIPT" ] || [ -f "$DETECT_SCRIPT" ]; then
-  pane_states=$("$DETECT_SCRIPT" --mode panes 2>/dev/null || true)
-fi
-
-state_lookup_mode="list"
-if [ "${BASH_VERSINFO[0]:-0}" -ge 4 ]; then
-  declare -A pane_state_map
-  while IFS=$'\t' read -r pane_id pane_state; do
-    [ -z "$pane_id" ] && continue
-    pane_state_map["$pane_id"]="$pane_state"
-  done <<< "$pane_states"
-  state_lookup_mode="map"
-else
-  pane_state_ids=()
-  pane_state_values=()
-  while IFS=$'\t' read -r pane_id pane_state; do
-    [ -z "$pane_id" ] && continue
-    pane_state_ids+=("$pane_id")
-    pane_state_values+=("$pane_state")
-  done <<< "$pane_states"
-fi
-
-STATE_VALUE=""
-state_of_pane() {
-  local pane_id=$1
-  local i
-  STATE_VALUE=""
-  if [ "$state_lookup_mode" = "map" ]; then
-    STATE_VALUE="${pane_state_map[$pane_id]-}"
-  else
-    for ((i = 0; i < ${#pane_state_ids[@]}; i++)); do
-      if [ "${pane_state_ids[$i]}" = "$pane_id" ]; then
-        STATE_VALUE="${pane_state_values[$i]}"
-        return
-      fi
-    done
-  fi
-}
-
 ai_rows=""
 other_rows=""
 
-while IFS=$'\t' read -r pane_id win_idx win_name path; do
+while IFS=$'\t' read -r window_target window_key win_name pane_count cached_state path; do
   branch_of_cached "$path"
   branch=$BRANCH_VALUE
-  state_of_pane "$pane_id"
-  state=$STATE_VALUE
+  state=${cached_state#state=}
 
   case "$path" in
     "$HOME"*) path="~${path#"$HOME"}" ;;
   esac
 
   icon=""
+  title_color=$cyan
   case "$state" in
-    working) icon="${green}●${reset} " ;;
-    idle) icon="${gray}●${reset} " ;;
+    working) icon="${working_color}●${reset} "; title_color=$working_color ;;
+    idle) icon="${idle_color}●${reset} "; title_color=$idle_color ;;
   esac
+  pane_label="${pane_count} panes"
+  [ "$pane_count" = 1 ] && pane_label="1 pane"
 
   if [ -n "$branch" ]; then
-    display=$(printf "%s%s%s%s: %s%s%s %s(%s)%s %s%s%s" \
+    display=$(printf "%s%s%s%s: %s%s%s %s[%s]%s %s(%s)%s %s%s%s" \
       "$icon" \
-      "$gray" "$win_idx" "$reset" \
-      "$cyan" "$win_name" "$reset" \
+      "$gray" "$window_key" "$reset" \
+      "$title_color" "$win_name" "$reset" \
+      "$gray" "$pane_label" "$reset" \
       "$green" "$branch" "$reset" \
       "$gray" "$path" "$reset")
   else
-    display=$(printf "%s%s%s%s: %s%s%s %s%s%s" \
+    display=$(printf "%s%s%s%s: %s%s%s %s[%s]%s %s%s%s" \
       "$icon" \
-      "$gray" "$win_idx" "$reset" \
-      "$cyan" "$win_name" "$reset" \
+      "$gray" "$window_key" "$reset" \
+      "$title_color" "$win_name" "$reset" \
+      "$gray" "$pane_label" "$reset" \
       "$gray" "$path" "$reset")
   fi
 
   if [ -n "$state" ]; then
-    ai_rows="${ai_rows}${pane_id}"$'\t'"${display}"$'\n'
+    ai_rows="${ai_rows}${window_target}"$'\t'"${display}"$'\n'
   else
-    other_rows="${other_rows}${pane_id}"$'\t'"${display}"$'\n'
+    other_rows="${other_rows}${window_target}"$'\t'"${display}"$'\n'
   fi
-done <<< "$pane_rows"
+done <<< "$window_rows"
+
+export TMUX_WINDOW_PREVIEW_SCRIPT="$(dirname "$SCRIPT_PATH")/tmux-window-preview.py"
 
 target=$(
+  # Default fzf layout renders the first rows at the bottom, nearest the prompt.
   printf '%s%s' "$ai_rows" "$other_rows" |
   fzf \
     --ansi \
+    --layout=default \
+    --no-sort \
     --with-nth=2.. \
     --delimiter=$'\t' \
-    --preview='
-      tmux capture-pane -t {1} -p -e | tail -n "$FZF_PREVIEW_LINES"
-    ' \
+    --prompt='Window> ' \
+    --header='Enter: switch window (last active pane) · Esc: cancel' \
+    --preview='python3 "$TMUX_WINDOW_PREVIEW_SCRIPT" {1}' \
     --preview-window='right:60%' \
     --bind='enter:accept' |
   cut -f1
 )
 
+# A window target retains its active pane; do not select a pane explicitly.
 [ -n "$target" ] && tmux switch-client -t "$target"
 exit 0

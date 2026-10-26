@@ -4,6 +4,8 @@
 
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/tmux-ai-palette.sh"
+
 readonly L=$'\xee\x82\xb6'   # U+E0B6 powerline left half-circle
 readonly R=$'\xee\x82\xb4'   # U+E0B4 powerline right half-circle
 readonly SBG="#000000"       # status bar background
@@ -12,10 +14,10 @@ readonly SBG="#000000"       # status bar background
 # the same state hue with a lighter surface; selection never changes its meaning.
 # working = cyan (activity), idle = amber (ready for input), ordinary = slate.
 readonly NON_CURRENT_BG="#{?#{==:#{@ai_state},working},#16343b,#{?#{==:#{@ai_state},idle},#382e1e,#242833}}"
-readonly NON_CURRENT_FG="#{?#{==:#{@ai_state},working},#79dce8,#{?#{==:#{@ai_state},idle},#e8bd75,#b3bccb}}"
+readonly NON_CURRENT_FG="#{?#{==:#{@ai_state},working},${TMUX_AI_WORKING_FG},#{?#{==:#{@ai_state},idle},${TMUX_AI_IDLE_FG},#b3bccb}}"
 readonly CURRENT_BG="#{?#{==:#{@ai_state},working},#28515a,#{?#{==:#{@ai_state},idle},#59462b,#3b4963}}"
 readonly CURRENT_FG="#f2f5fa"
-readonly STATE_FG="#{?#{==:#{@ai_state},working},#79dce8,#{?#{==:#{@ai_state},idle},#e8bd75,#b3bccb}}"
+readonly STATE_FG="#{?#{==:#{@ai_state},working},${TMUX_AI_WORKING_FG},#{?#{==:#{@ai_state},idle},${TMUX_AI_IDLE_FG},#b3bccb}}"
 # A simple activity mark supplements cyan; idle tabs use color alone.
 readonly STATE_MARK="#{?#{==:#{@ai_state},working},~ ,}"
 # Only actionable tmux alerts get a flag; selection (*) and last-window (-)
