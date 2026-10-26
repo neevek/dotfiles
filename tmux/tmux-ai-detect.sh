@@ -24,13 +24,16 @@ esac
 allowlist=$(tmux show-option -gqv @ai_commands 2>/dev/null)
 [ -z "$allowlist" ] && allowlist="claude,codex"
 
-# Content-delta state: hash of pane output (excluding input box) per invocation.
-hash_file="${TMPDIR:-/tmp}/tmux-ai-detect-hash.tsv"
-declare -A prev_hash
+# Keep cache state separate for each server, including after a server restart.
+server_identity=$(tmux display-message -p '#{socket_path}:#{pid}' 2>/dev/null)
+server_key=$(printf '%s' "$server_identity" | cksum | cut -d' ' -f1)
+hash_file="${TMPDIR:-/tmp}/tmux-ai-detect-v2-${server_key}.tsv"
+declare -A prev_hash prev_stamp
 if [ -r "$hash_file" ]; then
-  while IFS=$'\t' read -r _pid _hash; do
+  while IFS=$'\t' read -r _pid _hash _stamp; do
     [ -z "$_pid" ] && continue
     prev_hash["$_pid"]="$_hash"
+    prev_stamp["$_pid"]="${_stamp:--}"
   done < "$hash_file"
 fi
 
@@ -38,8 +41,9 @@ fi
 # The input box (❯ prompt + status lines) is stripped so user typing
 # does not affect the hash — only program output changes it.
 pane_content_hash() {
-  local pane_id="$1"
-  tmux capture-pane -t "$pane_id" -p -S -50 2>/dev/null | awk '
+  local pane_id="$1" content
+  content=$(tmux capture-pane -t "$pane_id" -p -S -50 2>/dev/null) || return 1
+  printf '%s\n' "$content" | awk '
     { lines[++n] = $0 }
     END {
       # Find last prompt ❯ (U+276F = E2 9D AF) in bottom 12 lines.
@@ -56,7 +60,7 @@ pane_content_hash() {
 
 ai_panes=$(
   {
-    tmux list-panes -a -F "P	#{pane_pid}	#{pane_id}	#{session_name}:#{window_index}"
+    tmux list-panes -a -F "P	#{pane_pid}	#{pane_id}	#{session_name}:#{window_index}	g#{pane_output_generation}	h#{history_generation}	#{pane_width}	#{pane_height}"
     ps -eo pid=,ppid=,command=
   } | awk -v allowlist="$allowlist" '
     function trim(s) {
@@ -196,6 +200,9 @@ ai_panes=$(
     $1 == "P" {
       pane_pid[$2] = $3
       pane_win[$2] = $4
+      # Older servers expand unsupported fields to empty strings ("g").
+      # PID, history generation and dimensions invalidate respawns/reflows.
+      pane_stamp[$2] = ($5 ~ /^g[0-9]+$/ ? $2 ":" $5 ":" $6 ":" $7 ":" $8 : "-")
       next
     }
     $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ {
@@ -226,7 +233,7 @@ ai_panes=$(
                   break
                 }
               }
-              print pane "\t" win "\t" active
+              print pane "\t" win "\t" active "\t" pane_stamp[cur]
               emitted[pane] = 1
             }
             break
@@ -240,9 +247,9 @@ ai_panes=$(
 
 declare -A pane_state
 declare -A window_state
-declare -A current_hash
+declare -A current_hash current_stamp
 
-while IFS=$'\t' read -r pane_id win_id is_active; do
+while IFS=$'\t' read -r pane_id win_id is_active stamp; do
   [ -z "$pane_id" ] && continue
 
   if [ "$is_active" = "1" ]; then
@@ -250,10 +257,18 @@ while IFS=$'\t' read -r pane_id win_id is_active; do
     pane_state["$pane_id"]="working"
     window_state["$win_id"]="working"
   else
-    # No children — check if pane output changed since last invocation.
-    hash=$(pane_content_hash "$pane_id")
-    current_hash["$pane_id"]="$hash"
+    # No children: avoid capturing unchanged panes on tmux 3.8+.
+    # Changed output still goes through input-area filtering and hashing.
     prev="${prev_hash[$pane_id]-}"
+    if [ "$stamp" != "-" ] && [ -n "$prev" ] &&
+       [ "$stamp" = "${prev_stamp[$pane_id]-}" ]; then
+      hash="$prev"
+    elif ! hash=$(pane_content_hash "$pane_id"); then
+      # A disappearing pane or failed capture must not become cached output.
+      continue
+    fi
+    current_hash["$pane_id"]="$hash"
+    current_stamp["$pane_id"]="$stamp"
 
     if [ -n "$prev" ] && [ "$hash" != "$prev" ]; then
       pane_state["$pane_id"]="working"
@@ -267,18 +282,22 @@ while IFS=$'\t' read -r pane_id win_id is_active; do
   fi
 done <<< "$ai_panes"
 
-# Persist hashes for next invocation (skip if unchanged).
+# Persist hashes and their pre-capture stamps atomically. Output arriving during
+# capture changes the next stamp, so it will be checked again on the next run.
 hash_changed=0
+[ "${#current_hash[@]}" -ne "${#prev_hash[@]}" ] && hash_changed=1
 for pane_id in "${!current_hash[@]}"; do
-  if [ "${current_hash[$pane_id]}" != "${prev_hash[$pane_id]-}" ]; then
+  if [ "${current_hash[$pane_id]}" != "${prev_hash[$pane_id]-}" ] ||
+     [ "${current_stamp[$pane_id]}" != "${prev_stamp[$pane_id]-}" ]; then
     hash_changed=1; break
   fi
 done
 if [ "$hash_changed" -eq 1 ]; then
   hash_tmp="${hash_file}.tmp.$$"
   trap 'rm -f "$hash_tmp" 2>/dev/null' EXIT
+  : > "$hash_tmp"
   for pane_id in "${!current_hash[@]}"; do
-    printf "%s\t%s\n" "$pane_id" "${current_hash[$pane_id]}" >> "$hash_tmp"
+    printf "%s\t%s\t%s\n" "$pane_id" "${current_hash[$pane_id]}" "${current_stamp[$pane_id]}" >> "$hash_tmp"
   done
   mv -f "$hash_tmp" "$hash_file" 2>/dev/null || true
 fi
