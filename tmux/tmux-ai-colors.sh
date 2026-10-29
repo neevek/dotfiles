@@ -18,8 +18,8 @@ readonly NON_CURRENT_FG="#{?#{==:#{@ai_state},working},${TMUX_AI_WORKING_FG},#{?
 readonly CURRENT_BG="#{?#{==:#{@ai_state},working},#28515a,#{?#{==:#{@ai_state},idle},#59462b,#3b4963}}"
 readonly CURRENT_FG="#f2f5fa"
 readonly STATE_FG="#{?#{==:#{@ai_state},working},${TMUX_AI_WORKING_FG},#{?#{==:#{@ai_state},idle},${TMUX_AI_IDLE_FG},#b3bccb}}"
-# A simple activity mark supplements cyan; idle tabs use color alone.
-readonly STATE_MARK="#{?#{==:#{@ai_state},working},~ ,}"
+# Nerd Font nf-md-robot (U+F06A9) supplements cyan; idle tabs use color alone.
+readonly STATE_MARK="#{?#{==:#{@ai_state},working},󰚩 ,}"
 # Only actionable tmux alerts get a flag; selection (*) and last-window (-)
 # already have visual context and otherwise clutter the start of each label.
 readonly ALERT="#{?window_bell_flag, !,#{?window_activity_flag, +,}}"

@@ -5,8 +5,8 @@
 #   --mode windows -> outputs "<session:window>\t<state>"
 #
 # States:
-#   working: AI process is actively executing (shell children or pane output changing)
-#   idle:    pane is AI-associated but not producing output
+#   working: AI shows a running indicator, has shell children, or output is changing
+#   idle:    AI pane has no running indicator, shell tools, or new output
 
 mode="windows"
 if [ "$1" = "--mode" ] && [ -n "$2" ]; then
@@ -27,35 +27,52 @@ allowlist=$(tmux show-option -gqv @ai_commands 2>/dev/null)
 # Keep cache state separate for each server, including after a server restart.
 server_identity=$(tmux display-message -p '#{socket_path}:#{pid}' 2>/dev/null)
 server_key=$(printf '%s' "$server_identity" | cksum | cut -d' ' -f1)
-hash_file="${TMPDIR:-/tmp}/tmux-ai-detect-v2-${server_key}.tsv"
-declare -A prev_hash prev_stamp
+hash_file="${TMPDIR:-/tmp}/tmux-ai-detect-v3-${server_key}.tsv"
+declare -A prev_hash prev_stamp prev_working
 if [ -r "$hash_file" ]; then
-  while IFS=$'\t' read -r _pid _hash _stamp; do
+  while IFS=$'\t' read -r _pid _hash _stamp _working; do
     [ -z "$_pid" ] && continue
     prev_hash["$_pid"]="$_hash"
     prev_stamp["$_pid"]="${_stamp:--}"
+    prev_working["$_pid"]="${_working:-0}"
   done < "$hash_file"
 fi
 
-# Capture pane content above the input box and return a checksum.
-# The input box (❯ prompt + status lines) is stripped so user typing
+# Capture both the running indicator and a checksum above the input box.
+# The input box (❯/› prompt + status lines) is stripped so user typing
 # does not affect the hash — only program output changes it.
-pane_content_hash() {
-  local pane_id="$1" content
+pane_content_snapshot() {
+  local pane_id="$1" content snapshot
   content=$(tmux capture-pane -t "$pane_id" -p -S -50 2>/dev/null) || return 1
-  printf '%s\n' "$content" | awk '
+  snapshot=$(printf '%s\n' "$content" | LC_ALL=C awk '
     { lines[++n] = $0 }
     END {
-      # Find last prompt ❯ (U+276F = E2 9D AF) in bottom 12 lines.
+      # Find the Claude ❯ or Codex › input prompt in the footer.
       cut = n
       for (i = n; i >= 1 && i >= n - 12; i--) {
         s = lines[i]
         sub(/^[[:space:]]+/, "", s)
-        if (substr(s, 1, 3) == "\342\235\257") { cut = i - 1; break }
+        if (substr(s, 1, 3) == "\342\235\257" ||
+            substr(s, 1, 3) == "\342\200\272") { cut = i - 1; break }
       }
+      # Look for UI markers near the input rather than old transcript history.
+      # These remain visible through network/tool output pauses.
+      working = 0
+      for (i = cut; i >= 1 && i >= cut - 12; i--) {
+        s = lines[i]
+        if (s ~ /^[[:space:]]*[^[:space:]]+[[:space:]].*\(.*esc to interrupt\)/ ||
+            s ~ /^[[:space:]]*esc to interrupt([[:space:]]|$)/ ||
+            s ~ /^[[:space:]]*(✢|✳|✶|✻|✽)[[:space:]].*(…|\.\.\.)/) {
+          working = 1
+          break
+        }
+      }
+      print working
       for (i = 1; i <= cut; i++) print lines[i]
     }
-  ' | cksum | cut -d' ' -f1
+  ')
+  PANE_WORKING=${snapshot%%$'\n'*}
+  PANE_HASH=$(printf '%s\n' "${snapshot#*$'\n'}" | cksum | cut -d' ' -f1)
 }
 
 ai_panes=$(
@@ -247,7 +264,7 @@ ai_panes=$(
 
 declare -A pane_state
 declare -A window_state
-declare -A current_hash current_stamp
+declare -A current_hash current_stamp current_working
 
 while IFS=$'\t' read -r pane_id win_id is_active stamp; do
   [ -z "$pane_id" ] && continue
@@ -263,14 +280,19 @@ while IFS=$'\t' read -r pane_id win_id is_active stamp; do
     if [ "$stamp" != "-" ] && [ -n "$prev" ] &&
        [ "$stamp" = "${prev_stamp[$pane_id]-}" ]; then
       hash="$prev"
-    elif ! hash=$(pane_content_hash "$pane_id"); then
+      working="${prev_working[$pane_id]:-0}"
+    elif pane_content_snapshot "$pane_id"; then
+      hash=$PANE_HASH
+      working=$PANE_WORKING
+    else
       # A disappearing pane or failed capture must not become cached output.
       continue
     fi
     current_hash["$pane_id"]="$hash"
     current_stamp["$pane_id"]="$stamp"
+    current_working["$pane_id"]="$working"
 
-    if [ -n "$prev" ] && [ "$hash" != "$prev" ]; then
+    if [ "$working" = 1 ] || { [ -n "$prev" ] && [ "$hash" != "$prev" ]; }; then
       pane_state["$pane_id"]="working"
       window_state["$win_id"]="working"
     else
@@ -282,13 +304,14 @@ while IFS=$'\t' read -r pane_id win_id is_active stamp; do
   fi
 done <<< "$ai_panes"
 
-# Persist hashes and their pre-capture stamps atomically. Output arriving during
-# capture changes the next stamp, so it will be checked again on the next run.
+# Persist snapshots and their pre-capture stamps atomically. Output arriving
+# during capture changes the next stamp, so it is checked again on the next run.
 hash_changed=0
 [ "${#current_hash[@]}" -ne "${#prev_hash[@]}" ] && hash_changed=1
 for pane_id in "${!current_hash[@]}"; do
   if [ "${current_hash[$pane_id]}" != "${prev_hash[$pane_id]-}" ] ||
-     [ "${current_stamp[$pane_id]}" != "${prev_stamp[$pane_id]-}" ]; then
+     [ "${current_stamp[$pane_id]}" != "${prev_stamp[$pane_id]-}" ] ||
+     [ "${current_working[$pane_id]}" != "${prev_working[$pane_id]-}" ]; then
     hash_changed=1; break
   fi
 done
@@ -297,7 +320,8 @@ if [ "$hash_changed" -eq 1 ]; then
   trap 'rm -f "$hash_tmp" 2>/dev/null' EXIT
   : > "$hash_tmp"
   for pane_id in "${!current_hash[@]}"; do
-    printf "%s\t%s\t%s\n" "$pane_id" "${current_hash[$pane_id]}" "${current_stamp[$pane_id]}" >> "$hash_tmp"
+    printf "%s\t%s\t%s\t%s\n" "$pane_id" "${current_hash[$pane_id]}" \
+      "${current_stamp[$pane_id]}" "${current_working[$pane_id]}" >> "$hash_tmp"
   done
   mv -f "$hash_tmp" "$hash_file" 2>/dev/null || true
 fi
